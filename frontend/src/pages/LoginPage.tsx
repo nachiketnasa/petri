@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { useAuth } from '../context/AuthContext';
+import { ApiError } from '../api/types';
 
 export function LoginPage() {
   const { user, login, signup } = useAuth();
@@ -11,17 +12,27 @@ export function LoginPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   if (user) return <Navigate to="/dashboard" replace />;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (isSignup) {
-      await signup(name || 'Explorer', email, password);
-    } else {
-      await login(email, password);
+    setError('');
+    setSubmitting(true);
+    try {
+      if (isSignup) {
+        await signup(name || 'Explorer', email, password);
+      } else {
+        await login(email, password);
+      }
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
-    navigate('/dashboard');
   }
 
   return (
@@ -96,8 +107,9 @@ export function LoginPage() {
             placeholder="••••••••"
             style={{ marginBottom: 22 }}
           />
-          <button type="submit" className="btn btn-primary btn-block">
-            {isSignup ? 'Create account' : 'Log in'}
+          {error && <div style={{ marginBottom: 14, fontSize: 12.5, color: 'var(--red-dark)' }}>{error}</div>}
+          <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
+            {submitting ? 'Please wait…' : isSignup ? 'Create account' : 'Log in'}
           </button>
         </form>
 

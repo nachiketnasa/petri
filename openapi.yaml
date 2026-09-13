@@ -1,5 +1,556 @@
-Read the frontend's API client in frontend/
+openapi: 3.0.3
+info:
+  title: Petri API
+  description: >
+    Backend for Petri, a kanban tool for tracking personal "Tiny Experiments".
+    Matches the mock client the frontend already codes against
+    (frontend/src/api/client.ts) — this file is the contract both sides
+    implement against; the frontend's mock module is replaced by real calls
+    to this API without changing any component.
+  version: 0.1.0
 
-Create openapi.yaml at the repository root.
+servers:
+  - url: http://localhost:8091
 
-Specify the backend this frontend expects: every endpoint, method, path, request body, response body, and which endpoints need authentication.
+tags:
+  - name: auth
+  - name: profile
+  - name: experiments
+  - name: shared
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/signup:
+    post:
+      tags: [auth]
+      summary: Create an account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Log in
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Incorrect email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Log out and invalidate the current token
+      responses:
+        '204':
+          description: Logged out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /me:
+    get:
+      tags: [profile]
+      summary: Get the current user
+      responses:
+        '200':
+          description: The current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [profile]
+      summary: Update the current user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePatch'
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [profile]
+      summary: Delete the current account and all of its experiments
+      responses:
+        '204':
+          description: Account deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /experiments:
+    get:
+      tags: [experiments]
+      summary: List the current user's experiments
+      responses:
+        '200':
+          description: The caller's experiments, across all columns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Experiment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [experiments]
+      summary: Create an experiment (always starts in Backlog)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewExperimentRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /experiments/{experimentId}:
+    parameters:
+      - $ref: '#/components/parameters/ExperimentId'
+    patch:
+      tags: [experiments]
+      summary: Edit title/hypothesis (Backlog or Active only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExperimentEditRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Experiment is not in Backlog or Active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [experiments]
+      summary: Delete an experiment (Backlog or Active only)
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Experiment is not in Backlog or Active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /experiments/{experimentId}/move:
+    parameters:
+      - $ref: '#/components/parameters/ExperimentId'
+    post:
+      tags: [experiments]
+      summary: Move an experiment to another column
+      description: >
+        Moving to `archived` is rejected unless a retro has already been
+        submitted for this experiment (via POST .../retro, which archives it
+        directly) — this endpoint exists for the other column transitions
+        (e.g. Backlog → Active, or back).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveRequest'
+      responses:
+        '200':
+          description: Moved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Moving to Archived without a saved retro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /experiments/{experimentId}/checkins:
+    parameters:
+      - $ref: '#/components/parameters/ExperimentId'
+    post:
+      tags: [experiments]
+      summary: Log a check-in (Active only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckinRequest'
+      responses:
+        '200':
+          description: The experiment with the new check-in appended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Experiment is not Active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /experiments/{experimentId}/retro:
+    parameters:
+      - $ref: '#/components/parameters/ExperimentId'
+    post:
+      tags: [experiments]
+      summary: Submit a retro, which archives the experiment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetroRequest'
+      responses:
+        '200':
+          description: The now-archived experiment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /experiments/{experimentId}/share:
+    parameters:
+      - $ref: '#/components/parameters/ExperimentId'
+    post:
+      tags: [experiments]
+      summary: Toggle public sharing for an experiment
+      description: >
+        Turning sharing on issues a fresh, unguessable share token; turning
+        it off clears the token, immediately invalidating any existing link.
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /shared/{token}:
+    get:
+      tags: [shared]
+      summary: Read a shared experiment's public status (no auth)
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The public view of a shared experiment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicExperiment'
+        '404':
+          description: No experiment is shared under this token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token returned by /auth/signup or /auth/login.
+
+  parameters:
+    ExperimentId:
+      name: experimentId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not found, or not owned by the caller
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Request failed validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        detail:
+          description: Human-readable message, or FastAPI's structured validation detail.
+      required: [detail]
+
+    Cadence:
+      type: string
+      enum: [Daily, Weekly, Custom]
+    CheckinType:
+      type: string
+      enum: [done, rating]
+    Column:
+      type: string
+      enum: [backlog, active, reflect, archived]
+    Decision:
+      type: string
+      enum: [continue, stop, pivot, iterate]
+    DurationUnit:
+      type: string
+      enum: [days, weeks]
+    AvatarColor:
+      type: string
+      enum: [green, amber, blue, rose, violet, slate]
+
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        bio: { type: string }
+        avatarUrl: { type: string, nullable: true }
+        avatarColor: { $ref: '#/components/schemas/AvatarColor' }
+      required: [id, name, email, bio, avatarUrl, avatarColor]
+
+    SignupRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+      required: [name, email, password]
+
+    LoginRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+      required: [email, password]
+
+    AuthResponse:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        token: { type: string }
+      required: [user, token]
+
+    ProfilePatch:
+      type: object
+      description: The frontend always sends the full profile on save.
+      properties:
+        name: { type: string, minLength: 1 }
+        bio: { type: string }
+        avatarUrl: { type: string, nullable: true }
+        avatarColor: { $ref: '#/components/schemas/AvatarColor' }
+      required: [name, bio, avatarUrl, avatarColor]
+
+    CheckIn:
+      type: object
+      properties:
+        id: { type: string }
+        value:
+          type: string
+          description: "'done' | 'skip' | '1'..'5', depending on the experiment's checkinType"
+        note: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, value, note, createdAt]
+
+    Retro:
+      type: object
+      properties:
+        worked: { type: string, minLength: 1 }
+        notWorked: { type: string, minLength: 1 }
+        decision: { $ref: '#/components/schemas/Decision' }
+      required: [worked, notWorked, decision]
+
+    Experiment:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        hypothesis: { type: string }
+        cadence: { $ref: '#/components/schemas/Cadence' }
+        checkinType: { $ref: '#/components/schemas/CheckinType' }
+        durationValue: { type: integer, minimum: 1 }
+        durationUnit: { $ref: '#/components/schemas/DurationUnit' }
+        column: { $ref: '#/components/schemas/Column' }
+        checkins:
+          type: array
+          items: { $ref: '#/components/schemas/CheckIn' }
+        retro:
+          oneOf:
+            - $ref: '#/components/schemas/Retro'
+            - type: 'null'
+        shared: { type: boolean }
+        shareToken: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+      required:
+        - id
+        - title
+        - hypothesis
+        - cadence
+        - checkinType
+        - durationValue
+        - durationUnit
+        - column
+        - checkins
+        - retro
+        - shared
+        - shareToken
+        - createdAt
+
+    NewExperimentRequest:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        hypothesis: { type: string, minLength: 1 }
+        cadence: { $ref: '#/components/schemas/Cadence' }
+        checkinType: { $ref: '#/components/schemas/CheckinType' }
+        durationValue: { type: integer, minimum: 1 }
+        durationUnit: { $ref: '#/components/schemas/DurationUnit' }
+      required: [title, hypothesis, cadence, checkinType, durationValue, durationUnit]
+
+    ExperimentEditRequest:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        hypothesis: { type: string, minLength: 1 }
+      minProperties: 1
+
+    MoveRequest:
+      type: object
+      properties:
+        column: { $ref: '#/components/schemas/Column' }
+      required: [column]
+
+    CheckinRequest:
+      type: object
+      properties:
+        value: { type: string, minLength: 1 }
+        note: { type: string, default: '' }
+      required: [value]
+
+    RetroRequest:
+      type: object
+      properties:
+        worked: { type: string, minLength: 1 }
+        notWorked: { type: string, minLength: 1 }
+        decision: { $ref: '#/components/schemas/Decision' }
+      required: [worked, notWorked, decision]
+
+    PublicExperiment:
+      type: object
+      description: Only what a public, unauthenticated viewer should see.
+      properties:
+        title: { type: string }
+        hypothesis: { type: string }
+        cadence: { $ref: '#/components/schemas/Cadence' }
+        column: { $ref: '#/components/schemas/Column' }
+        checkinCount: { type: integer, minimum: 0 }
+      required: [title, hypothesis, cadence, column, checkinCount]

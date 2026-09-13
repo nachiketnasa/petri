@@ -9,11 +9,18 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   async function handleDelete() {
     setDeleting(true);
-    await deleteAccount();
-    navigate('/');
+    setDeleteError('');
+    try {
+      await deleteAccount();
+      navigate('/');
+    } catch {
+      setDeleteError('Could not delete your account. Please try again.');
+      setDeleting(false);
+    }
   }
 
   return (
@@ -84,6 +91,7 @@ export function SettingsPage() {
               </button>
             </div>
           )}
+          {deleteError && <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--red-dark)' }}>{deleteError}</div>}
         </div>
       </div>
     </div>

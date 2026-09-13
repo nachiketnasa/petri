@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import * as api from '../api/client';
+import { useAuth } from './AuthContext';
 import type { Column, Experiment, NewExperimentInput, Retro } from '../api/types';
 
 interface ExperimentsContextValue {
@@ -20,16 +21,25 @@ interface ExperimentsContextValue {
 const ExperimentsContext = createContext<ExperimentsContextValue | null>(null);
 
 export function ExperimentsProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // No signed-in user (still restoring the session, or logged out): there's
+    // nothing to fetch — GET /experiments requires auth.
+    if (!user) {
+      setExperiments([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     api.listExperiments().then((exps) => {
       setExperiments(exps);
       setLoading(false);
     });
-  }, []);
+  }, [user]);
 
   const upsert = useCallback((exp: Experiment) => {
     setExperiments((prev) => prev.map((e) => (e.id === exp.id ? exp : e)));

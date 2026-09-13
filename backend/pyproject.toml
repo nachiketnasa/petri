@@ -1,0 +1,23 @@
+[project]
+name = "petri-backend"
+version = "0.1.0"
+description = "Petri API — FastAPI backend against a SQLAlchemy-backed database (SQLite by default)."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "sqlalchemy>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27.0",
+    "pytest>=8.3.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

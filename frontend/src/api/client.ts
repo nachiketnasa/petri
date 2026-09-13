@@ -1,8 +1,9 @@
 /**
- * Mock backend. Every call the UI makes to "the backend" goes through this
- * module and nowhere else. Swapping to the real FastAPI service later means
- * rewriting the bodies of these functions to `fetch()` the OpenAPI contract
- * — call sites in components/pages never change.
+ * The real backend client. Every call the UI makes to "the backend" goes
+ * through this module and nowhere else — it's a mechanical translation of
+ * openapi.yaml into fetch() calls. Function signatures match what this
+ * module looked like when it was a mock, so nothing above it (contexts,
+ * pages, components) needed to change for this swap.
  */
 import type {
   Experiment,
@@ -13,175 +14,172 @@ import type {
   User,
 } from './types';
 import { ApiError } from './types';
-import { seedExperiments } from './mockData';
 
-const LATENCY_MS = 250;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8091';
+const TOKEN_KEY = 'petri:token';
 
-function delay<T>(value: T): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), LATENCY_MS));
+// ---- token storage --------------------------------------------------
+
+function getToken(): string | null {
+  try {
+    return window.localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value));
+function setToken(token: string): void {
+  try {
+    window.localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    // ignore — session just won't survive a reload in this browser
+  }
 }
 
-function randomToken(): string {
-  return Math.random().toString(36).slice(2, 10);
+function clearToken(): void {
+  try {
+    window.localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // ignore
+  }
 }
 
-// ---- in-memory "database" ----------------------------------------------
+// ---- fetch wrapper ----------------------------------------------------
 
-let currentUser: User | null = null;
-let experiments: Experiment[] = seedExperiments();
+/** FastAPI's error body is `{"detail": "message"}` for our own checks, or
+ * `{"detail": [{"msg": "...", ...}, ...]}` for automatic Pydantic validation
+ * errors — normalize both into one readable string. */
+function extractErrorMessage(detail: unknown): string {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) => (d && typeof d === 'object' && 'msg' in d ? String((d as { msg: unknown }).msg) : String(d)))
+      .join('; ');
+  }
+  return 'Something went wrong.';
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers);
+  if (options.body) headers.set('Content-Type', 'application/json');
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+
+  if (response.status === 204) return undefined as T;
+
+  const isJson = response.headers.get('content-type')?.includes('application/json');
+  const body = isJson ? await response.json() : undefined;
+
+  if (!response.ok) {
+    throw new ApiError(extractErrorMessage(body?.detail));
+  }
+  return body as T;
+}
+
+const get = <T>(path: string) => request<T>(path);
+const post = <T>(path: string, body?: unknown) =>
+  request<T>(path, { method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined });
+const patch = <T>(path: string, body: unknown) =>
+  request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+const del = <T>(path: string) => request<T>(path, { method: 'DELETE' });
 
 // ---- auth ----------------------------------------------------------------
 
-export async function login(email: string, _password: string): Promise<User> {
-  currentUser = {
-    id: 'u1',
-    name: email.split('@')[0] || 'Explorer',
-    email,
-    bio: '',
-    avatarUrl: null,
-    avatarColor: 'green',
-  };
-  return delay(clone(currentUser));
+interface AuthResponse {
+  user: User;
+  token: string;
 }
 
-export async function signup(name: string, email: string, _password: string): Promise<User> {
-  currentUser = { id: 'u1', name, email, bio: '', avatarUrl: null, avatarColor: 'green' };
-  return delay(clone(currentUser));
+export async function login(email: string, password: string): Promise<User> {
+  const { user, token } = await post<AuthResponse>('/auth/login', { email, password });
+  setToken(token);
+  return user;
 }
 
-export function logout(): void {
-  currentUser = null;
+export async function signup(name: string, email: string, password: string): Promise<User> {
+  const { user, token } = await post<AuthResponse>('/auth/signup', { name, email, password });
+  setToken(token);
+  return user;
 }
 
-export async function updateProfile(patch: ProfilePatch): Promise<User> {
-  if (!currentUser) throw new ApiError('Not logged in.');
-  if (patch.name !== undefined && !patch.name.trim()) {
-    throw new ApiError('Display name can’t be empty.');
+export async function logout(): Promise<void> {
+  try {
+    await post<void>('/auth/logout');
+  } finally {
+    clearToken();
   }
-  currentUser = { ...currentUser, ...patch };
-  return delay(clone(currentUser));
+}
+
+export async function updateProfile(patchBody: ProfilePatch): Promise<User> {
+  return patch<User>('/me', patchBody);
 }
 
 export async function deleteAccount(): Promise<void> {
-  currentUser = null;
-  experiments = [];
-  return delay(undefined);
+  await del<void>('/me');
+  clearToken();
 }
 
-export function getCurrentUser(): User | null {
-  return currentUser ? clone(currentUser) : null;
+/** Restores a session from a stored token, if any. Resolves null if there
+ * isn't one, or if it's no longer valid. */
+export async function getCurrentUser(): Promise<User | null> {
+  if (!getToken()) return null;
+  try {
+    return await get<User>('/me');
+  } catch {
+    clearToken();
+    return null;
+  }
 }
 
 // ---- experiments -----------------------------------------------------
 
 export async function listExperiments(): Promise<Experiment[]> {
-  return delay(clone(experiments));
-}
-
-function findOrThrow(id: string): Experiment {
-  const exp = experiments.find((e) => e.id === id);
-  if (!exp) throw new ApiError(`Experiment ${id} not found`);
-  return exp;
+  return get<Experiment[]>('/experiments');
 }
 
 export async function createExperiment(input: NewExperimentInput): Promise<Experiment> {
-  if (!input.title.trim() || !input.hypothesis.trim()) {
-    throw new ApiError('Title and hypothesis are required.');
-  }
-  const exp: Experiment = {
-    id: 'e' + Date.now(),
-    title: input.title.trim(),
-    hypothesis: input.hypothesis.trim(),
-    cadence: input.cadence,
-    checkinType: input.checkinType,
-    durationValue: input.durationValue,
-    durationUnit: input.durationUnit,
-    column: 'backlog',
-    checkins: [],
-    retro: null,
-    shared: false,
-    shareToken: null,
-    createdAt: new Date().toISOString(),
-  };
-  experiments = [...experiments, exp];
-  return delay(clone(exp));
+  return post<Experiment>('/experiments', input);
 }
 
 export async function updateExperiment(
   id: string,
-  patch: Partial<Pick<Experiment, 'title' | 'hypothesis'>>,
+  patchBody: Partial<Pick<Experiment, 'title' | 'hypothesis'>>,
 ): Promise<Experiment> {
-  const exp = findOrThrow(id);
-  if (exp.column !== 'backlog' && exp.column !== 'active') {
-    throw new ApiError('Only Backlog or Active experiments can be edited.');
-  }
-  Object.assign(exp, patch);
-  return delay(clone(exp));
+  return patch<Experiment>(`/experiments/${id}`, patchBody);
 }
 
 export async function deleteExperiment(id: string): Promise<void> {
-  const exp = findOrThrow(id);
-  if (exp.column !== 'backlog' && exp.column !== 'active') {
-    throw new ApiError('Only Backlog or Active experiments can be deleted.');
-  }
-  experiments = experiments.filter((e) => e.id !== id);
-  return delay(undefined);
+  await del<void>(`/experiments/${id}`);
 }
 
-/** Moves a card between columns. Throws if the move violates a spec rule. */
+/** Moves a card between columns. Throws if the move violates a spec rule
+ * (the server enforces the retro gate, not just the UI). */
 export async function moveExperiment(id: string, column: Experiment['column']): Promise<Experiment> {
-  const exp = findOrThrow(id);
-  if (column === 'archived' && !exp.retro) {
-    throw new ApiError('Complete a retro before archiving this experiment.');
-  }
-  exp.column = column;
-  return delay(clone(exp));
+  return post<Experiment>(`/experiments/${id}/move`, { column });
 }
 
 export async function logCheckin(id: string, value: string, note: string): Promise<Experiment> {
-  const exp = findOrThrow(id);
-  if (exp.column !== 'active') {
-    throw new ApiError('Check-ins can only be logged while an experiment is Active.');
-  }
-  exp.checkins = [
-    ...exp.checkins,
-    { id: 'c' + Date.now(), value, note, createdAt: new Date().toISOString() },
-  ];
-  return delay(clone(exp));
+  return post<Experiment>(`/experiments/${id}/checkins`, { value, note });
 }
 
 export async function submitRetro(id: string, retro: Retro): Promise<Experiment> {
-  const exp = findOrThrow(id);
-  if (!retro.worked.trim() || !retro.notWorked.trim() || !retro.decision) {
-    throw new ApiError('A retro needs what worked, what didn’t, and a decision.');
-  }
-  exp.retro = retro;
-  exp.column = 'archived';
-  return delay(clone(exp));
+  return post<Experiment>(`/experiments/${id}/retro`, retro);
 }
 
 export async function toggleShare(id: string): Promise<Experiment> {
-  const exp = findOrThrow(id);
-  exp.shared = !exp.shared;
-  exp.shareToken = exp.shared ? randomToken() : null;
-  return delay(clone(exp));
+  return post<Experiment>(`/experiments/${id}/share`);
 }
 
 /** Public, unauthenticated read used by the /s/:token share page. */
 export async function getSharedExperiment(token: string): Promise<PublicExperiment | null> {
-  const exp = experiments.find((e) => e.shared && e.shareToken === token);
-  if (!exp) return delay(null);
-  return delay({
-    title: exp.title,
-    hypothesis: exp.hypothesis,
-    cadence: exp.cadence,
-    column: exp.column,
-    checkinCount: exp.checkins.length,
-  });
+  try {
+    return await get<PublicExperiment>(`/shared/${token}`);
+  } catch (err) {
+    if (err instanceof ApiError) return null;
+    throw err;
+  }
 }
 
 /** Derived, read-only "due" state for a card — never persisted (see specs.md non-goals). */

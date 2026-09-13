@@ -6,9 +6,10 @@ import { DECISION_META, DECISION_OPTIONS } from '../utils/decisions';
 interface Props {
   experiment: Experiment;
   onClose: () => void;
+  onCheckinSaved?: () => void;
 }
 
-export function DetailDrawer({ experiment, onClose }: Props) {
+export function DetailDrawer({ experiment, onClose, onCheckinSaved }: Props) {
   const { logCheckin, submitRetro, toggleShare, moveExperiment, updateExperiment, deleteExperiment } =
     useExperiments();
 
@@ -202,6 +203,7 @@ export function DetailDrawer({ experiment, onClose }: Props) {
               onClick={async () => {
                 await logCheckin(experiment.id, checkinValue, checkinNote);
                 setCheckinNote('');
+                onCheckinSaved?.();
               }}
             >
               Save check-in

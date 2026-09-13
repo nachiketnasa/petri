@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { DragEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppNav } from '../components/AppNav';
 import { ExperimentCard } from '../components/ExperimentCard';
 import { DetailDrawer } from '../components/DetailDrawer';
 import { NewExperimentModal } from '../components/NewExperimentModal';
 import { useExperiments } from '../context/ExperimentsContext';
+import { useToast } from '../context/ToastContext';
 import type { Column } from '../api/types';
 
 const COLUMNS: { key: Column; label: string; dot: string }[] = [
@@ -16,8 +18,16 @@ const COLUMNS: { key: Column; label: string; dot: string }[] = [
 
 export function BoardPage() {
   const { experiments, loading, moveExperiment, toggleShare, error, clearError } = useExperiments();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+
+  function handleCheckinSaved() {
+    showToast('Check-in saved.');
+    setSelectedId(null);
+    navigate('/dashboard');
+  }
 
   useEffect(() => {
     if (!error) return;
@@ -101,7 +111,9 @@ export function BoardPage() {
         </div>
       )}
 
-      {selected && <DetailDrawer experiment={selected} onClose={() => setSelectedId(null)} />}
+      {selected && (
+        <DetailDrawer experiment={selected} onClose={() => setSelectedId(null)} onCheckinSaved={handleCheckinSaved} />
+      )}
       {showNew && <NewExperimentModal onClose={() => setShowNew(false)} />}
       {error && <div className="toast">{error}</div>}
     </div>
