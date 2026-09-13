@@ -1,0 +1,77 @@
+:root {
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-body: 'Work Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --bg: oklch(97% 0.015 80);
+  --paper: oklch(98.5% 0.012 80);
+  --card: oklch(99% 0.008 85);
+  --field: oklch(99.5% 0.005 85);
+  --ink: oklch(24% 0.02 55);
+  --ink-muted: oklch(48% 0.02 55);
+  --ink-faint: oklch(55% 0.02 55);
+  --border: oklch(89% 0.015 75);
+  --border-strong: oklch(85% 0.015 75);
+
+  --accent: oklch(55% 0.11 145);
+  --accent-dark: oklch(38% 0.11 145);
+  --accent-soft: oklch(93% 0.05 145);
+
+  --amber: oklch(70% 0.15 75);
+  --amber-dark: oklch(45% 0.13 70);
+  --amber-soft: oklch(94% 0.06 75);
+
+  --red: oklch(58% 0.16 25);
+  --red-dark: oklch(48% 0.15 25);
+  --red-soft: oklch(94% 0.05 25);
+
+  --blue-dark: oklch(45% 0.1 230);
+  --blue-soft: oklch(93% 0.04 230);
+
+  --rose-dark: oklch(48% 0.15 10);
+  --rose-soft: oklch(94% 0.05 10);
+  --violet-dark: oklch(45% 0.13 300);
+  --violet-soft: oklch(93% 0.05 300);
+  --slate-dark: oklch(40% 0.02 250);
+  --slate-soft: oklch(93% 0.01 250);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--bg);
+}
+
+a {
+  color: var(--accent);
+}
+a:hover {
+  color: var(--accent-dark);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.paper-bg {
+  background-image: radial-gradient(oklch(90% 0.02 75) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
