@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
+import { Turnstile } from '../components/Turnstile';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/types';
 
@@ -14,6 +15,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
 
   if (user) return <Navigate to="/dashboard" replace />;
 
@@ -23,7 +25,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       if (isSignup) {
-        await signup(name || 'Explorer', email, password);
+        await signup(name || 'Explorer', email, password, captchaToken);
       } else {
         await login(email, password);
       }
@@ -107,6 +109,7 @@ export function LoginPage() {
             placeholder="••••••••"
             style={{ marginBottom: 22 }}
           />
+          {isSignup && <Turnstile onVerify={setCaptchaToken} />}
           {error && <div style={{ marginBottom: 14, fontSize: 12.5, color: 'var(--red-dark)' }}>{error}</div>}
           <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
             {submitting ? 'Please wait…' : isSignup ? 'Create account' : 'Log in'}

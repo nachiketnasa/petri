@@ -19,6 +19,7 @@ class SignupRequest(BaseModel):
     name: str = Field(min_length=1)
     email: str = Field(min_length=3)
     password: str = Field(min_length=8)
+    captchaToken: str = ""
 
 
 class LoginRequest(BaseModel):

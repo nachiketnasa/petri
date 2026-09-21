@@ -98,8 +98,8 @@ export async function login(email: string, password: string): Promise<User> {
   return user;
 }
 
-export async function signup(name: string, email: string, password: string): Promise<User> {
-  const { user, token } = await post<AuthResponse>('/auth/signup', { name, email, password });
+export async function signup(name: string, email: string, password: string, captchaToken: string): Promise<User> {
+  const { user, token } = await post<AuthResponse>('/auth/signup', { name, email, password, captchaToken });
   setToken(token);
   return user;
 }

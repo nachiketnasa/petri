@@ -10,7 +10,7 @@ interface AuthContextValue {
    * isn't bounced to /login while that check is still in flight. */
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (name: string, email: string, password: string) => Promise<void>;
+  signup: (name: string, email: string, password: string, captchaToken: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (patch: ProfilePatch) => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -33,8 +33,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(await api.login(email, password));
   }, []);
 
-  const signup = useCallback(async (name: string, email: string, password: string) => {
-    setUser(await api.signup(name, email, password));
+  const signup = useCallback(async (name: string, email: string, password: string, captchaToken: string) => {
+    setUser(await api.signup(name, email, password, captchaToken));
   }, []);
 
   const logout = useCallback(async () => {
