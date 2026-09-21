@@ -3,6 +3,7 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: sqlite:////data/petri.db
+      FRONTEND_BASE_URL: https://petri.nachiketnasa.com
     volumes:
       - backend-data:/data
     restart: unless-stopped

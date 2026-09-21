@@ -1,3 +1,6 @@
+from conftest import signup_and_verify
+
+
 def test_get_me_returns_current_user(auth_client):
     resp = auth_client.get("/me")
     assert resp.status_code == 200
@@ -45,8 +48,7 @@ def test_delete_me_removes_account_and_its_data(auth_client):
 
 
 def test_can_sign_up_again_with_the_same_email_after_deleting(client):
-    signup = client.post("/auth/signup", json={"name": "Ada", "email": "ada@example.com", "password": "hunter22"})
-    token = signup.json()["token"]
+    token = signup_and_verify(client, "Ada", "ada@example.com", "hunter22")
     client.headers.update({"Authorization": f"Bearer {token}"})
     client.delete("/me")
     del client.headers["Authorization"]

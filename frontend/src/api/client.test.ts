@@ -37,7 +37,7 @@ describe('api client (fetch wrapper)', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ user: { id: 'u1', name: 'Ada', email: 'ada@example.com' }, token: 'tok_123' }),
     );
-    await login('ada@example.com', 'hunter22');
+    await login('ada@example.com', 'hunter22', 'captcha-tok');
 
     fetchMock.mockResolvedValueOnce(jsonResponse([]));
     await listExperiments();
@@ -51,7 +51,7 @@ describe('api client (fetch wrapper)', () => {
     const { login } = await import('./client');
     fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'Incorrect email or password.' }, { status: 401 }));
 
-    await expect(login('ada@example.com', 'wrong')).rejects.toThrow('Incorrect email or password.');
+    await expect(login('ada@example.com', 'wrong', 'captcha-tok')).rejects.toThrow('Incorrect email or password.');
   });
 
   it('formats a Pydantic-style array error detail into a readable message', async () => {

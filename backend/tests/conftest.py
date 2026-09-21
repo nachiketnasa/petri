@@ -25,13 +25,22 @@ def client():
     return TestClient(app)
 
 
+def signup_and_verify(client, name: str, email: str, password: str) -> str:
+    """Signs up, verifies via the store-issued token, and returns a bearer
+    token — the same real flow a user goes through, just skipping the
+    actual email since tests have direct store access."""
+    client.post("/auth/signup", json={"name": name, "email": email, "password": password})
+    user = store.get_user_by_email(email)
+    resp = client.post("/auth/verify", json={"token": user.verification_token})
+    return resp.json()["token"]
+
+
 @pytest.fixture
 def auth_client(client):
-    """A TestClient carrying a bearer token for a freshly signed-up user."""
-    resp = client.post(
-        "/auth/signup",
-        json={"name": "Ada", "email": "ada@example.com", "password": "hunter22"},
-    )
-    token = resp.json()["token"]
+    """A TestClient carrying a bearer token for a freshly signed-up,
+    already-verified user (signup itself no longer returns a token — the
+    account must be verified first, same as a real user clicking the
+    emailed link)."""
+    token = signup_and_verify(client, "Ada", "ada@example.com", "hunter22")
     client.headers.update({"Authorization": f"Bearer {token}"})
     return client

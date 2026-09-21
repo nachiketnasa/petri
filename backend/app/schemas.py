@@ -25,6 +25,19 @@ class SignupRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    captchaToken: str = ""
+
+
+class SignupResponse(BaseModel):
+    email: str
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: str
 
 
 class User(BaseModel):

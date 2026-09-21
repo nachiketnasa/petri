@@ -29,6 +29,9 @@ class UserModel(Base):
     bio: Mapped[str] = mapped_column(String, nullable=False, default="")
     avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
     avatar_color: Mapped[str] = mapped_column(String, nullable=False, default="green")
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    verification_token: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    verification_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     experiments: Mapped[list["ExperimentModel"]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"

@@ -92,16 +92,33 @@ interface AuthResponse {
   token: string;
 }
 
-export async function login(email: string, password: string): Promise<User> {
-  const { user, token } = await post<AuthResponse>('/auth/login', { email, password });
+export async function login(email: string, password: string, captchaToken: string): Promise<User> {
+  const { user, token } = await post<AuthResponse>('/auth/login', { email, password, captchaToken });
   setToken(token);
   return user;
 }
 
-export async function signup(name: string, email: string, password: string, captchaToken: string): Promise<User> {
-  const { user, token } = await post<AuthResponse>('/auth/signup', { name, email, password, captchaToken });
-  setToken(token);
+/** Signup no longer logs the account in — it must be verified first (see
+ * verifyEmail). Returns the email so the UI can show "check your inbox". */
+export async function signup(name: string, email: string, password: string, captchaToken: string): Promise<string> {
+  const { email: confirmedEmail } = await post<{ email: string }>('/auth/signup', {
+    name,
+    email,
+    password,
+    captchaToken,
+  });
+  return confirmedEmail;
+}
+
+/** Consumes the token from the emailed verification link and logs the user in. */
+export async function verifyEmail(token: string): Promise<User> {
+  const { user, token: authToken } = await post<AuthResponse>('/auth/verify', { token });
+  setToken(authToken);
   return user;
+}
+
+export async function resendVerification(email: string): Promise<void> {
+  await post<void>('/auth/resend-verification', { email });
 }
 
 export async function logout(): Promise<void> {

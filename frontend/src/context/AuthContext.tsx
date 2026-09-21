@@ -9,8 +9,12 @@ interface AuthContextValue {
    * token) has settled. ProtectedRoute waits on this so a logged-in user
    * isn't bounced to /login while that check is still in flight. */
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (name: string, email: string, password: string, captchaToken: string) => Promise<void>;
+  login: (email: string, password: string, captchaToken: string) => Promise<void>;
+  /** Returns the signed-up email — the account isn't logged in yet, it
+   * still needs verifying (see verifyEmail). */
+  signup: (name: string, email: string, password: string, captchaToken: string) => Promise<string>;
+  verifyEmail: (token: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (patch: ProfilePatch) => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -29,12 +33,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    setUser(await api.login(email, password));
+  const login = useCallback(async (email: string, password: string, captchaToken: string) => {
+    setUser(await api.login(email, password, captchaToken));
   }, []);
 
   const signup = useCallback(async (name: string, email: string, password: string, captchaToken: string) => {
-    setUser(await api.signup(name, email, password, captchaToken));
+    return api.signup(name, email, password, captchaToken);
+  }, []);
+
+  const verifyEmail = useCallback(async (token: string) => {
+    setUser(await api.verifyEmail(token));
+  }, []);
+
+  const resendVerification = useCallback(async (email: string) => {
+    await api.resendVerification(email);
   }, []);
 
   const logout = useCallback(async () => {
@@ -58,8 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, signup, logout, updateProfile, deleteAccount }),
-    [user, loading, login, signup, logout, updateProfile, deleteAccount],
+    () => ({ user, loading, login, signup, verifyEmail, resendVerification, logout, updateProfile, deleteAccount }),
+    [user, loading, login, signup, verifyEmail, resendVerification, logout, updateProfile, deleteAccount],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

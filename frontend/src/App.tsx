@@ -5,6 +5,7 @@ import { ToastProvider } from './context/ToastContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { BoardPage } from './pages/BoardPage';
 import { ArchivePage } from './pages/ArchivePage';
@@ -22,6 +23,7 @@ export function App() {
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/verify" element={<VerifyEmailPage />} />
               <Route path="/s/:token" element={<SharePage />} />
               <Route
                 path="/dashboard"

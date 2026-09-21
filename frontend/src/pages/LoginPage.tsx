@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/types';
 
 export function LoginPage() {
-  const { user, login, signup } = useAuth();
+  const { user, login, signup, resendVerification } = useAuth();
   const navigate = useNavigate();
   const [isSignup, setIsSignup] = useState(false);
   const [name, setName] = useState('');
@@ -16,25 +16,65 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resent, setResent] = useState(false);
 
   if (user) return <Navigate to="/dashboard" replace />;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    setNeedsVerification(false);
     setSubmitting(true);
     try {
       if (isSignup) {
-        await signup(name || 'Explorer', email, password, captchaToken);
+        const signedUpEmail = await signup(name || 'Explorer', email, password, captchaToken);
+        setPendingVerificationEmail(signedUpEmail);
       } else {
-        await login(email, password);
+        await login(email, password, captchaToken);
+        navigate('/dashboard');
       }
-      navigate('/dashboard');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+      const message = err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
+      setError(message);
+      if (message.toLowerCase().includes('verify your email')) {
+        setNeedsVerification(true);
+        setPendingVerificationEmail(email);
+      }
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleResend() {
+    setResent(false);
+    await resendVerification(pendingVerificationEmail);
+    setResent(true);
+  }
+
+  if (pendingVerificationEmail && !needsVerification) {
+    return (
+      <div className="paper-bg" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div className="card" style={{ width: '100%', maxWidth: 380, padding: '36px 32px', textAlign: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 22 }}>
+            <Logo size={30} />
+            <div style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 22, fontWeight: 500 }}>Petri</div>
+          </div>
+          <p style={{ fontSize: 14, marginBottom: 6 }}>Check your email</p>
+          <p style={{ fontSize: 13, color: 'var(--ink-faint)', marginBottom: 18 }}>
+            We sent a verification link to <strong>{pendingVerificationEmail}</strong>. Click it to activate your account.
+          </p>
+          {resent ? (
+            <p style={{ fontSize: 12.5, color: 'var(--ink-faint)' }}>Sent again — check your inbox.</p>
+          ) : (
+            <button type="button" className="btn btn-block" onClick={handleResend} style={{ marginBottom: 10 }}>
+              Resend email
+            </button>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -109,8 +149,16 @@ export function LoginPage() {
             placeholder="••••••••"
             style={{ marginBottom: 22 }}
           />
-          {isSignup && <Turnstile onVerify={setCaptchaToken} />}
-          {error && <div style={{ marginBottom: 14, fontSize: 12.5, color: 'var(--red-dark)' }}>{error}</div>}
+          <Turnstile onVerify={setCaptchaToken} />
+          {error && <div style={{ marginBottom: 8, fontSize: 12.5, color: 'var(--red-dark)' }}>{error}</div>}
+          {needsVerification &&
+            (resent ? (
+              <div style={{ marginBottom: 14, fontSize: 12.5, color: 'var(--ink-faint)' }}>Sent again — check your inbox.</div>
+            ) : (
+              <button type="button" className="btn" onClick={handleResend} style={{ marginBottom: 14, width: '100%' }}>
+                Resend verification email
+              </button>
+            ))}
           <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
             {submitting ? 'Please wait…' : isSignup ? 'Create account' : 'Log in'}
           </button>

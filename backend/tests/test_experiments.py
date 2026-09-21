@@ -1,3 +1,5 @@
+from conftest import signup_and_verify
+
 NEW_EXPERIMENT = {
     "title": "Cold showers",
     "hypothesis": "A 5-minute cold shower improves my focus.",
@@ -36,10 +38,7 @@ def test_create_experiment_requires_title_and_hypothesis(auth_client):
 def test_list_experiments_only_returns_the_caller_s_own(auth_client, client):
     create_experiment(auth_client)
 
-    other_signup = client.post(
-        "/auth/signup", json={"name": "Grace", "email": "grace@example.com", "password": "hunter22"}
-    )
-    other_token = other_signup.json()["token"]
+    other_token = signup_and_verify(client, "Grace", "grace@example.com", "hunter22")
     other_headers = {"Authorization": f"Bearer {other_token}"}
 
     assert len(auth_client.get("/experiments").json()) == 1
@@ -49,10 +48,7 @@ def test_list_experiments_only_returns_the_caller_s_own(auth_client, client):
 def test_cannot_access_another_user_s_experiment(auth_client, client):
     exp = create_experiment(auth_client)
 
-    other_signup = client.post(
-        "/auth/signup", json={"name": "Grace", "email": "grace@example.com", "password": "hunter22"}
-    )
-    other_token = other_signup.json()["token"]
+    other_token = signup_and_verify(client, "Grace", "grace@example.com", "hunter22")
     other_headers = {"Authorization": f"Bearer {other_token}"}
 
     resp = client.post(f"/experiments/{exp['id']}/move", json={"column": "active"}, headers=other_headers)

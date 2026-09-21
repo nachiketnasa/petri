@@ -13,7 +13,7 @@ from __future__ import annotations
 import secrets
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Iterator
 
 from sqlalchemy import select
@@ -26,10 +26,15 @@ from app.errors import ConflictError, NotFoundError
 from app.security import hash_password, verify_password
 
 EDITABLE_COLUMNS = {"backlog", "active"}
+VERIFICATION_TOKEN_TTL = timedelta(hours=24)
 
 
 def _new_id(prefix: str) -> str:
     return f"{prefix}_{secrets.token_hex(8)}"
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _iso(value: datetime) -> str:
@@ -122,6 +127,8 @@ class UserRecord:
     bio: str
     avatar_url: str | None
     avatar_color: schemas.AvatarColor
+    email_verified: bool
+    verification_token: str | None
 
     def to_schema(self) -> schemas.User:
         return schemas.User(
@@ -175,6 +182,8 @@ def _user_to_record(model: UserModel) -> UserRecord:
         bio=model.bio,
         avatar_url=model.avatar_url,
         avatar_color=model.avatar_color,  # type: ignore[arg-type]
+        email_verified=model.email_verified,
+        verification_token=model.verification_token,
     )
 
 
@@ -199,12 +208,20 @@ def has_any_users() -> bool:
 # ---- users & auth ---------------------------------------------------------
 
 
-def create_user(name: str, email: str, password: str) -> UserRecord:
+def create_user(name: str, email: str, password: str, *, email_verified: bool = False) -> UserRecord:
     with _session() as session:
         existing = session.scalar(select(UserModel).where(UserModel.email == email))
         if existing is not None:
             raise ConflictError("An account with this email already exists.")
-        model = UserModel(id=_new_id("u"), name=name, email=email, password_hash=hash_password(password))
+        model = UserModel(
+            id=_new_id("u"),
+            name=name,
+            email=email,
+            password_hash=hash_password(password),
+            email_verified=email_verified,
+            verification_token=None if email_verified else secrets.token_urlsafe(32),
+            verification_token_expires_at=None if email_verified else _utcnow() + VERIFICATION_TOKEN_TTL,
+        )
         session.add(model)
         session.commit()
         return _user_to_record(model)
@@ -215,6 +232,41 @@ def authenticate(email: str, password: str) -> UserRecord | None:
         model = session.scalar(select(UserModel).where(UserModel.email == email))
         if model is None or not verify_password(password, model.password_hash):
             return None
+        return _user_to_record(model)
+
+
+def get_user_by_email(email: str) -> UserRecord | None:
+    with _session() as session:
+        model = session.scalar(select(UserModel).where(UserModel.email == email))
+        return _user_to_record(model) if model else None
+
+
+def regenerate_verification_token(user_id: str) -> str | None:
+    """Returns None if the user is already verified (nothing to resend)."""
+    with _session() as session:
+        model = session.get(UserModel, user_id)
+        if model is None or model.email_verified:
+            return None
+        model.verification_token = secrets.token_urlsafe(32)
+        model.verification_token_expires_at = _utcnow() + VERIFICATION_TOKEN_TTL
+        session.commit()
+        return model.verification_token
+
+
+def verify_email_token(token: str) -> UserRecord | None:
+    with _session() as session:
+        model = session.scalar(select(UserModel).where(UserModel.verification_token == token))
+        if model is None or model.verification_token_expires_at is None:
+            return None
+        expires_at = model.verification_token_expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < _utcnow():
+            return None
+        model.email_verified = True
+        model.verification_token = None
+        model.verification_token_expires_at = None
+        session.commit()
         return _user_to_record(model)
 
 
@@ -386,7 +438,7 @@ def seed_demo_data() -> None:
     """Populates a demo account so the frontend has something to show on a
     fresh boot. Never called by `reset()` — tests stay on a clean slate and
     build their own fixtures via the API."""
-    demo = create_user(name="Demo", email="demo@petri.app", password="password123")
+    demo = create_user(name="Demo", email="demo@petri.app", password="password123", email_verified=True)
 
     with _session() as session:
 
