@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
@@ -19,6 +19,13 @@ export function LoginPage() {
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resent, setResent] = useState(false);
+
+  // Cloudflare Turnstile tokens are single-use — a stale token carried over
+  // from before the tab switch would fail silently, so clear it and let the
+  // freshly-keyed widget (below) issue a new one.
+  useEffect(() => {
+    setCaptchaToken('');
+  }, [isSignup]);
 
   if (user) return <Navigate to="/dashboard" replace />;
 
@@ -149,7 +156,7 @@ export function LoginPage() {
             placeholder="••••••••"
             style={{ marginBottom: 22 }}
           />
-          <Turnstile onVerify={setCaptchaToken} />
+          <Turnstile key={isSignup ? 'signup' : 'login'} onVerify={setCaptchaToken} />
           {error && <div style={{ marginBottom: 8, fontSize: 12.5, color: 'var(--red-dark)' }}>{error}</div>}
           {needsVerification &&
             (resent ? (
