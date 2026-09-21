@@ -18,6 +18,9 @@ Parameters:
   RepoBranch:
     Type: String
     Default: main
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Your account's default VPC (find with `aws ec2 describe-vpcs --filters Name=is-default,Values=true`).
 
 Resources:
   InstanceRole:
@@ -42,6 +45,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Allow inbound HTTP only; no SSH port exposed.
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
