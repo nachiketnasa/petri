@@ -18,4 +18,5 @@ def test_send_calls_resend_api_when_key_configured(monkeypatch):
     request = mock_urlopen.call_args[0][0]
     assert request.full_url == "https://api.resend.com/emails"
     assert request.get_header("Authorization") == "Bearer test-key"
+    assert request.get_header("User-agent")  # Cloudflare (fronting Resend's API) blocks urllib's default UA
     assert b"token-123" in request.data
