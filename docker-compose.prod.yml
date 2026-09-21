@@ -4,6 +4,8 @@ services:
     environment:
       DATABASE_URL: sqlite:////data/petri.db
       FRONTEND_BASE_URL: https://petri.nachiketnasa.com
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
     volumes:
       - backend-data:/data
     restart: unless-stopped
@@ -13,6 +15,7 @@ services:
       context: ./frontend
       args:
         VITE_API_BASE_URL: ""
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
     ports:
       - "80:80"
       - "443:443"
