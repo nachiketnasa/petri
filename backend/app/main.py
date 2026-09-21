@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -17,9 +18,12 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Petri API", version="0.1.0", lifespan=lifespan)
 
+_default_origins = "http://localhost:5173,http://localhost:5183"
+_cors_origins = os.environ.get("CORS_ORIGINS", _default_origins).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5183"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

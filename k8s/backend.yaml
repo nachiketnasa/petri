@@ -34,6 +34,8 @@ spec:
           env:
             - name: DATABASE_URL
               value: sqlite:////data/petri.db
+            - name: CORS_ORIGINS
+              value: "http://localhost:5173,http://localhost:5183,http://localhost:8088"
           volumeMounts:
             - name: data
               mountPath: /data
