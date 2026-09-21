@@ -51,6 +51,10 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: "-1"
           CidrIp: 0.0.0.0/0
@@ -85,6 +89,12 @@ Resources:
 
           git clone --branch ${RepoBranch} --depth 1 ${RepoUrl} /opt/petri
           cd /opt/petri
+
+          mkdir -p certs
+          openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+            -keyout certs/privkey.pem -out certs/fullchain.pem \
+            -subj "/CN=petri"
+
           docker compose -f docker-compose.prod.yml up -d --build
 
   ElasticIP:
