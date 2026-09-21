@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Petri (single-instance deployment). One free-tier-eligible EC2 instance
+  runs the frontend and backend via docker compose, built directly from the
+  public GitHub repo. No ALB, NAT gateway, RDS, or ECR — those are the
+  pieces that cost money on an idle personal project. Remote access is via
+  SSM Session Manager, not SSH, so no inbound port 22 is opened.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t2.micro]
+    Description: Free-tier-eligible instance size.
+  RepoUrl:
+    Type: String
+    Default: https://github.com/nachiketnasa/petri.git
+  RepoBranch:
+    Type: String
+    Default: main
+
+Resources:
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound HTTP only; no SSH port exposed.
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+      IamInstanceProfile: !Ref InstanceProfile
+      SecurityGroupIds: [!Ref WebSecurityGroup]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+      Tags:
+        - Key: Name
+          Value: petri-app
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euo pipefail
+          dnf update -y
+          dnf install -y docker git
+          systemctl enable --now docker
+
+          mkdir -p /usr/libexec/docker/cli-plugins
+          curl -SL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+            -o /usr/libexec/docker/cli-plugins/docker-compose
+          chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+          git clone --branch ${RepoBranch} --depth 1 ${RepoUrl} /opt/petri
+          cd /opt/petri
+          docker compose -f docker-compose.prod.yml up -d --build
+
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Instance
+
+Outputs:
+  PublicIP:
+    Description: Point your DNS (Cloudflare A record) at this IP.
+    Value: !Ref ElasticIP
+  InstanceId:
+    Description: Use with `aws ssm start-session --target <this>` to redeploy.
+    Value: !Ref Instance
