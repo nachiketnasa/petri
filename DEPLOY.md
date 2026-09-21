@@ -22,10 +22,19 @@ anything is actually charged.
 Install the AWS CLI, then `aws configure` with an access key (IAM → your
 user → Security credentials).
 
+Find your account's default VPC ID:
+
+```
+aws ec2 describe-vpcs --filters Name=is-default,Values=true --query "Vpcs[0].VpcId" --output text
+```
+
+Then create the stack:
+
 ```
 aws cloudformation create-stack \
   --stack-name petri \
   --template-body file://cloudformation/petri-ec2-stack.yaml \
+  --parameters ParameterKey=VpcId,ParameterValue=<vpc-id from above> \
   --capabilities CAPABILITY_IAM
 ```
 
